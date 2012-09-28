@@ -1,0 +1,38 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<Import Project="$(MSBuildExtensionsPath)\MSBuildCommunityTasks\MSBuild.Community.Tasks.Targets"/>
+	<PropertyGroup>
+		<UpstreamPackagePattern>Orchard.Source.*.zip</UpstreamPackagePattern>
+		<UpstreamFolder>$(MSBuildProjectDirectory)\upstream</UpstreamFolder>
+		<OutputPackageFolder>$(MSBuildProjectDirectory)\pkg</OutputPackageFolder>
+		<NuGet>$(MSBuildProjectDirectory)\nuget.exe</NuGet>
+		<GalleryArtifactFolder>$(UpstreamFolder)\artifacts\Gallery</GalleryArtifactFolder>
+		<GalleryFolder>$(UpstreamFolder)\build\Gallery</GalleryFolder>
+	</PropertyGroup>
+	<Target Name="Build">
+		<MakeDir Directories="$(OutputPackageFolder)" />
+		<ItemGroup>
+			<UpstreamPackage Include="$(MSBuildProjectDirectory)\$(UpstreamPackagePattern)" />
+			<ContentPackageSpec Include="$(MSBuildProjectDirectory)\Orchard.nuspec"  />
+			<ContentPackageSpec Include="$(MSBuildProjectDirectory)\Orchard.Core.Web.nuspec"  />
+			<SymbolPackageSpec Include="$(MSBuildProjectDirectory)\*.nuspec" Exclude="@(ContentPackageSpec)" />
+		</ItemGroup>
+		<Unzip ZipFileName="@(UpstreamPackage)" TargetDirectory="$(UpstreamFolder)" Condition="!Exists($(UpstreamFolder))" />
+		<!--<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Clean;Compile;Package-Stage;Gallery" />-->
+		<Exec Command="$(NuGet) pack %(ContentPackageSpec.Identity) -OutputDirectory $(OutputPackageFolder) -BasePath $(UpstreamFolder)" />
+		<Exec Command="$(NuGet) pack %(SymbolPackageSpec.Identity) -Symbols -OutputDirectory $(OutputPackageFolder) -BasePath $(UpstreamFolder)" />
+		<ItemGroup>
+			<ModuleProject Include="$(GalleryFolder)\Modules\**\*.csproj" />
+			<ModuleFolder Include="@(ModuleProject -> '%(Directory)')" />
+			<ModuleName Include="@(ModuleProject -> '%(FileName)')" />
+		</ItemGroup>
+		<Exec Command="&quot;$(GalleryFolder)\bin\Orchard.exe&quot; package create %(ModuleName.Identity) &quot;$(GalleryArtifactFolder)&quot;" WorkingDirectory="$(GalleryFolder)" />
+		<ItemGroup>
+			<ModulePackage Include="$(GalleryArtifactFolder)\Orchard.Module.*.nupkg" />
+		</ItemGroup>
+		<Message Text="%(ModulePackage.Identity)" />
+		<Copy SourceFiles="@(ModulePackage)" DestinationFolder="$(OutputPackageFolder)" />
+	</Target>
+	<Target Name="Clean">
+		<RemoveDir Directories="$(UpstreamFolder);$(OutputPackageFolder)" />
+	</Target>
+</Project>
