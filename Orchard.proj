@@ -4,6 +4,8 @@
 		<UpstreamPackagePattern>$(MSBuildProjectDirectory)\Orchard.Source.*.zip</UpstreamPackagePattern>
 		<UpstreamFolder>$(MSBuildProjectDirectory)\upstream</UpstreamFolder>
 		<OutputPackageFolder>$(MSBuildProjectDirectory)\pkg</OutputPackageFolder>
+		<SourceModulesFolder>$(OutputPackageFolder)\src</SourceModulesFolder>
+		<BinaryModulesFolder>$(OutputPackageFolder)\bin</BinaryModulesFolder>
 		<NuGet>$(MSBuildProjectDirectory)\nuget.exe</NuGet>
 		<GalleryArtifactFolder>$(UpstreamFolder)\artifacts\Gallery</GalleryArtifactFolder>
 		<GalleryFolder>$(UpstreamFolder)\build\Gallery</GalleryFolder>
@@ -26,8 +28,8 @@
 			<PackageSpec Include="$(PackageSpecFolder)\*.nuspec"  />
 			<OverrideFile Include="$(OverrideFolder)\**\*.*" />
 		</ItemGroup>
-		<RemoveDir Directories="$(OutputPackageFolder)" />
-		<MakeDir Directories="$(OutputPackageFolder)" />
+		<RemoveDir Directories="$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder)" />
+		<MakeDir Directories="$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder)" />
 		<Exec Command="$(NuGet) pack %(PackageSpec.Identity) -OutputDirectory $(OutputPackageFolder) -BasePath $(UpstreamFolder)" />
 		<ItemGroup>
 			<ModuleProject Include="$(GalleryFolder)\Modules\**\*.csproj" />
@@ -40,7 +42,7 @@
 			<ModulePackage Include="$(GalleryArtifactFolder)\Orchard.Module.*.nupkg" />
 		</ItemGroup>
 		<Message Text="%(ModulePackage.Identity)" />
-		<Copy SourceFiles="@(ModulePackage)" DestinationFolder="$(OutputPackageFolder)" />
+		<Copy SourceFiles="@(ModulePackage)" DestinationFolder="$(SourceModulesFolder)" />
 	</Target>
 	<Target Name="Clean">
 		<RemoveDir Directories="$(UpstreamFolder)" />
@@ -48,6 +50,7 @@
 		<Target Name="Publish">
 		<ItemGroup>
 			<Package Include="$(OutputPackageFolder)\*.nupkg" />
+			<Package Include="$(BinaryModulesFolder)\*.nupkg" />
 		</ItemGroup>
 		<Exec Command="$(NuGet) push %(Package.Identity) -Source $(PackagePublishUrl)" />
 	</Target>

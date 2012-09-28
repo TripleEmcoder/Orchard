@@ -16,11 +16,15 @@ namespace ConsoleApplication1
         static void Main(string[] args)
         {
             var cacheDirectory = Path.Combine(Directory.GetCurrentDirectory(), "cache");
-            var outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), "output");
-            var inputDirectory = Path.Combine(Directory.GetCurrentDirectory(), @"E:\Marcin\Documents\Praca\Projekty\Orchard\pkg");
+            var orchardDirectory = @"E:\Marcin\Documents\Praca\Projekty\Orchard\pkg";
+            var inputDirectory = @"E:\Marcin\Documents\Praca\Projekty\Orchard\pkg\src";
+            var outputDirectory = @"E:\Marcin\Documents\Praca\Projekty\Orchard\pkg\bin";
 
             var cacheFileSystem = new PhysicalFileSystem(cacheDirectory);
             var cachePackageResolver = new DefaultPackagePathResolver(cacheFileSystem, false);
+
+            var orchardRepository = new LocalPackageRepository(orchardDirectory);
+            var orchardManager = new PackageManager(orchardRepository, cachePackageResolver, cacheFileSystem);
 
             var inputRepository = new LocalPackageRepository(inputDirectory);
             var inputManager = new PackageManager(inputRepository, cachePackageResolver, cacheFileSystem);
@@ -28,7 +32,7 @@ namespace ConsoleApplication1
             var references = new[] { "Orchard.Core", "Orchard.Framework", "Orchard.External" };
 
             foreach (var reference in references)
-                inputManager.InstallPackage(inputRepository.FindPackage(reference), false, false);
+                orchardManager.InstallPackage(orchardRepository.FindPackage(reference), false, false);
 
             foreach (var inputPackage in inputRepository.GetPackages().Where(p => p.Id.StartsWith("Orchard.Module.")))
             {
@@ -94,6 +98,7 @@ namespace ConsoleApplication1
                     @"Web.config",
                     @"Content\**",
                     @"Scripts\**",
+                    @"Recipes\**",
                     @"Styles\**",
                     @"Views\**"
                 };
