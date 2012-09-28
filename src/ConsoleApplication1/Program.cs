@@ -46,13 +46,14 @@ namespace ConsoleApplication1
             }
         }
 
-        private static void Do(LocalPackageRepository inputRepository, PackageManager inputManager, IPackage inputPackage, string cacheDirectory, IEnumerable<string> references, string outputDirectory)
+        private static void Do(LocalPackageRepository inputRepository, PackageManager inputManager, IPackage package, string cacheDirectory, IEnumerable<string> references, string outputDirectory)
         {
+            Console.WriteLine(package.GetFullName());
             var solution = new ProjectCollection();
             var logger = new ConsoleLogger();
 
-            inputManager.InstallPackage(inputPackage, false, false);
-            var packageDirectory = Path.Combine(cacheDirectory, inputPackage.Id);
+            inputManager.InstallPackage(package, false, false);
+            var packageDirectory = Path.Combine(cacheDirectory, package.Id);
             var moduleDirectory = Directory.GetDirectories(Path.Combine(packageDirectory, "Content", "Modules"))[0];
             var moduleName = Path.GetFileName(moduleDirectory);
             var project = solution.LoadProject(Path.Combine(moduleDirectory, moduleName + ".csproj"));
@@ -68,20 +69,25 @@ namespace ConsoleApplication1
             {
                 var referenceName = GetReferenceName(item);
                 var referenceDirectory = candidateDirectories.FirstOrDefault(d => File.Exists(Path.Combine(d, referenceName + ".dll")));
-                
+
                 if (referenceDirectory != null)
                     ReplaceReference(project, item, referenceName, referenceDirectory);
             }
+
+            var dependencies = new List<ManifestDependency>();
 
             foreach (var item in GetModuleReferences(project).ToList())
             {
                 var referencedModuleName = item.GetMetadataValue("Name");
                 var referencedPackageId = "Orchard.Module." + item.GetMetadataValue("Name");
+                var referencedPackage = inputRepository.FindPackage(referencedPackageId);
 
-                Do(inputRepository, inputManager, inputRepository.FindPackage(referencedPackageId), cacheDirectory, references, outputDirectory);
+                dependencies.Add(new ManifestDependency { Id = referencedPackage.Id, Version = "[" + referencedPackage.Version + "]" });
+
+                Do(inputRepository, inputManager, referencedPackage, cacheDirectory, references, outputDirectory);
                 ReplaceReference(project, item, referencedModuleName, Path.Combine(cacheDirectory, referencedPackageId, "Content", "Modules", referencedModuleName, "bin"));
             }
-            
+
             if (!File.Exists(Path.Combine(moduleDirectory, "bin", moduleName + ".dll")))
                 if (!project.Build(logger))
                     throw new Exception("Failed to build");
@@ -99,27 +105,28 @@ namespace ConsoleApplication1
                     @"Views\**"
                 };
 
-            var manifest = Manifest.Create(inputPackage);
+            var manifest = Manifest.Create(package);
+            manifest.Metadata.DependencySets = new List<ManifestDependencySet> { new ManifestDependencySet { Dependencies = dependencies } };
             manifest.Files = rules.Select(r => new ManifestFile { Source = @"Content\Modules\" + moduleName + @"\**\" + r, Target = @"Content\Modules\" + moduleName }).ToList();
 
-            var b = new PackageBuilder();
-            b.Populate(manifest.Metadata);
-            b.PopulateFiles(packageDirectory, manifest.Files);
+            var builder = new PackageBuilder();
+            builder.Populate(manifest.Metadata);
+            builder.PopulateFiles(packageDirectory, manifest.Files);
 
             Directory.CreateDirectory(outputDirectory);
             using (var outputPackageFile = File.Create(Path.Combine(outputDirectory, manifest.Metadata.Id + "." + manifest.Metadata.Version + ".nupkg")))
-                b.Save(outputPackageFile);
+                builder.Save(outputPackageFile);
         }
 
         private static string GetReferenceName(ProjectItem item)
         {
             if (item.ItemType == "ProjectReference")
                 return Path.GetFileNameWithoutExtension(item.EvaluatedInclude);
-            
+
             if (item.ItemType == "Reference")
                 return new AssemblyName(item.EvaluatedInclude).Name;
-            
-            throw new NotSupportedException(); 
+
+            throw new NotSupportedException();
         }
 
         private static IEnumerable<ProjectItem> GetReferences(Project project)
