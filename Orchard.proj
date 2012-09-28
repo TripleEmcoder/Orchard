@@ -1,30 +1,40 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 	<Import Project="$(MSBuildExtensionsPath)\MSBuildCommunityTasks\MSBuild.Community.Tasks.Targets"/>
 	<PropertyGroup>
-		<UpstreamPackagePattern>Orchard.Source.*.zip</UpstreamPackagePattern>
+		<UpstreamPackagePattern>$(MSBuildProjectDirectory)\Orchard.Source.*.zip</UpstreamPackagePattern>
 		<UpstreamFolder>$(MSBuildProjectDirectory)\upstream</UpstreamFolder>
 		<OutputPackageFolder>$(MSBuildProjectDirectory)\pkg</OutputPackageFolder>
 		<NuGet>$(MSBuildProjectDirectory)\nuget.exe</NuGet>
 		<GalleryArtifactFolder>$(UpstreamFolder)\artifacts\Gallery</GalleryArtifactFolder>
 		<GalleryFolder>$(UpstreamFolder)\build\Gallery</GalleryFolder>
+		<PackageSpecFolder>$(MSBuildProjectDirectory)</PackageSpecFolder>
+		<OverrideFolder>$(MSBuildProjectDirectory)\override</OverrideFolder>
+		<PackagePublishUrl>http://nuget.gw.symbolsource.org/Public/Orchard</PackagePublishUrl>
 	</PropertyGroup>
 	<Target Name="Build">
-		<MakeDir Directories="$(OutputPackageFolder)" />
+		<CallTarget Targets="Compile;Package" />
+	</Target>
+	<Target Name="Compile">
 		<ItemGroup>
-			<UpstreamPackage Include="$(MSBuildProjectDirectory)\$(UpstreamPackagePattern)" />
-			<ContentPackageSpec Include="$(MSBuildProjectDirectory)\Orchard.nuspec"  />
-			<ContentPackageSpec Include="$(MSBuildProjectDirectory)\Orchard.Core.Web.nuspec"  />
-			<SymbolPackageSpec Include="$(MSBuildProjectDirectory)\*.nuspec" Exclude="@(ContentPackageSpec)" />
+			<UpstreamPackage Include="$(UpstreamPackagePattern)" />
 		</ItemGroup>
 		<Unzip ZipFileName="@(UpstreamPackage)" TargetDirectory="$(UpstreamFolder)" Condition="!Exists($(UpstreamFolder))" />
-		<!--<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Clean;Compile;Package-Stage;Gallery" />-->
-		<Exec Command="$(NuGet) pack %(ContentPackageSpec.Identity) -OutputDirectory $(OutputPackageFolder) -BasePath $(UpstreamFolder)" />
-		<Exec Command="$(NuGet) pack %(SymbolPackageSpec.Identity) -Symbols -OutputDirectory $(OutputPackageFolder) -BasePath $(UpstreamFolder)" />
+		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Clean;Compile;Package-Stage;Gallery" />
+	</Target>
+	<Target Name="Package">
+		<ItemGroup>
+			<PackageSpec Include="$(PackageSpecFolder)\*.nuspec"  />
+			<OverrideFile Include="$(OverrideFolder)\**\*.*" />
+		</ItemGroup>
+		<RemoveDir Directories="$(OutputPackageFolder)" />
+		<MakeDir Directories="$(OutputPackageFolder)" />
+		<Exec Command="$(NuGet) pack %(PackageSpec.Identity) -OutputDirectory $(OutputPackageFolder) -BasePath $(UpstreamFolder)" />
 		<ItemGroup>
 			<ModuleProject Include="$(GalleryFolder)\Modules\**\*.csproj" />
 			<ModuleFolder Include="@(ModuleProject -> '%(Directory)')" />
 			<ModuleName Include="@(ModuleProject -> '%(FileName)')" />
 		</ItemGroup>
+		<Copy SourceFiles="@(OverrideFile)" DestinationFiles="@(OverrideFile->'$(GalleryFolder)\%(RecursiveDir)%(Filename)%(Extension)')" />
 		<Exec Command="&quot;$(GalleryFolder)\bin\Orchard.exe&quot; package create %(ModuleName.Identity) &quot;$(GalleryArtifactFolder)&quot;" WorkingDirectory="$(GalleryFolder)" />
 		<ItemGroup>
 			<ModulePackage Include="$(GalleryArtifactFolder)\Orchard.Module.*.nupkg" />
@@ -33,6 +43,12 @@
 		<Copy SourceFiles="@(ModulePackage)" DestinationFolder="$(OutputPackageFolder)" />
 	</Target>
 	<Target Name="Clean">
-		<RemoveDir Directories="$(UpstreamFolder);$(OutputPackageFolder)" />
+		<RemoveDir Directories="$(UpstreamFolder)" />
+	</Target>
+		<Target Name="Publish">
+		<ItemGroup>
+			<Package Include="$(OutputPackageFolder)\*.nupkg" />
+		</ItemGroup>
+		<Exec Command="$(NuGet) push %(Package.Identity) -Source $(PackagePublishUrl)" />
 	</Target>
 </Project>
