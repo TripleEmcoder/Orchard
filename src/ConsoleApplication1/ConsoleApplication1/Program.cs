@@ -16,14 +16,19 @@ namespace ConsoleApplication1
         static void Main(string[] args)
         {
             var cacheDirectory = Path.Combine(Directory.GetCurrentDirectory(), "cache");
-            var orchardDirectory = @"E:\Marcin\Documents\Praca\Projekty\Orchard\pkg";
-            var inputDirectory = @"E:\Marcin\Documents\Praca\Projekty\Orchard\pkg\src";
-            var outputDirectory = @"E:\Marcin\Documents\Praca\Projekty\Orchard\pkg\bin";
+            var orchardDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkg";
+            var inputDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkg\src";
+            var outputDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkg\bin";
 
             var cacheFileSystem = new PhysicalFileSystem(cacheDirectory);
             var cachePackageResolver = new DefaultPackagePathResolver(cacheFileSystem, false);
 
-            var orchardRepository = new LocalPackageRepository(orchardDirectory);
+            var orchardRepository = new AggregateRepository(new IPackageRepository[]
+                {
+                    new DataServicePackageRepository(new Uri("http://nuget.org/api/v2")), 
+                    new LocalPackageRepository(orchardDirectory)
+                });
+
             var orchardManager = new PackageManager(orchardRepository, cachePackageResolver, cacheFileSystem);
 
             var inputRepository = new LocalPackageRepository(inputDirectory);
@@ -59,18 +64,20 @@ namespace ConsoleApplication1
                 if (item == null)
                     continue;
 
-                ReplaceReference(project, item, reference, @"..\..\..\..\" + reference + @"\lib\net");
+                ReplaceReference(project, item, reference, Path.Combine(cacheDirectory, reference, "lib", "net"));
             }
 
             foreach (var item in project.Items.Where(i => i.ItemType == "Reference").ToList())
             {
+                var externalReferenceDirectory = Path.Combine(cacheDirectory, "Orchard.External", "lib", "net");
+
                 if (item.GetMetadataValue("HintPath").StartsWith(@"..\..\..\..\lib"))
                 {
-                    ReplaceReference(project, item, Path.GetFileNameWithoutExtension(item.GetMetadataValue("HintPath")), @"..\..\..\..\Orchard.External\lib\net");
+                    ReplaceReference(project, item, Path.GetFileNameWithoutExtension(item.GetMetadataValue("HintPath")), externalReferenceDirectory);
                 }
                 else if (item.EvaluatedInclude.StartsWith("ClaySharp,"))
                 {
-                    ReplaceReference(project, item, "ClaySharp", @"..\..\..\..\Orchard.External\lib\net");
+                    ReplaceReference(project, item, "ClaySharp", externalReferenceDirectory);
                 }
             }
 
@@ -83,7 +90,7 @@ namespace ConsoleApplication1
                     var referencedPackageId = "Orchard.Module." + item.GetMetadataValue("Name");
 
                     Do(inputRepository, inputManager, inputRepository.FindPackage(referencedPackageId), cacheDirectory, references, outputDirectory);
-                    ReplaceReference(project, item, referencedModuleName, @"..\..\..\..\" + referencedPackageId + @"\Content\Modules\" + referencedModuleName);
+                    ReplaceReference(project, item, referencedModuleName, Path.Combine(cacheDirectory, referencedPackageId, "Content", "Modules", referencedModuleName, "bin"));
                 }
             }
 
