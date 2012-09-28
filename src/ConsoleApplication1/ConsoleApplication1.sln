@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApplication1", "ConsoleApplication1\ConsoleApplication1.csproj", "{9EEEC2E7-368B-4F42-BB9F-CE8DAE58A0A6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApplication1", "ConsoleApplication1.csproj", "{9EEEC2E7-368B-4F42-BB9F-CE8DAE58A0A6}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{0303BEBD-5517-4B6B-B9A6-A0641F08A5DD}"
 	ProjectSection(SolutionItems) = preProject
