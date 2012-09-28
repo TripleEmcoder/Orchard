@@ -4,8 +4,8 @@
 		<UpstreamPackagePattern>$(MSBuildProjectDirectory)\Orchard.Source.*.zip</UpstreamPackagePattern>
 		<UpstreamFolder>$(MSBuildProjectDirectory)\upstream</UpstreamFolder>
 		<OutputPackageFolder>$(MSBuildProjectDirectory)\pkg</OutputPackageFolder>
-		<SourceModulesFolder>$(OutputPackageFolder)\src</SourceModulesFolder>
-		<BinaryModulesFolder>$(OutputPackageFolder)\bin</BinaryModulesFolder>
+		<SourceModulesFolder>$(MSBuildProjectDirectory)\pkgsrc</SourceModulesFolder>
+		<BinaryModulesFolder>$(MSBuildProjectDirectory)\pkgsrc</BinaryModulesFolder>
 		<NuGet>$(MSBuildProjectDirectory)\nuget.exe</NuGet>
 		<GalleryArtifactFolder>$(UpstreamFolder)\artifacts\Gallery</GalleryArtifactFolder>
 		<GalleryFolder>$(UpstreamFolder)\build\Gallery</GalleryFolder>
@@ -14,23 +14,24 @@
 		<PackagePublishUrl>http://nuget.gw.symbolsource.org/Public/Orchard</PackagePublishUrl>
 	</PropertyGroup>
 	<Target Name="Build">
-		<CallTarget Targets="Compile;Package" />
+		<CallTarget Targets="Clean;Compile;Package" />
 	</Target>
 	<Target Name="Compile">
 		<ItemGroup>
 			<UpstreamPackage Include="$(UpstreamPackagePattern)" />
 		</ItemGroup>
 		<Unzip ZipFileName="@(UpstreamPackage)" TargetDirectory="$(UpstreamFolder)" Condition="!Exists($(UpstreamFolder))" />
-		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Clean;Compile;Package-Stage;Gallery" />
+		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Compile" />
 	</Target>
 	<Target Name="Package">
+		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Package-Stage" />
 		<ItemGroup>
 			<PackageSpec Include="$(PackageSpecFolder)\*.nuspec"  />
 			<OverrideFile Include="$(OverrideFolder)\**\*.*" />
 		</ItemGroup>
-		<RemoveDir Directories="$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder)" />
 		<MakeDir Directories="$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder)" />
 		<Exec Command="$(NuGet) pack %(PackageSpec.Identity) -OutputDirectory $(OutputPackageFolder) -BasePath $(UpstreamFolder)" />
+		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Gallery" />
 		<ItemGroup>
 			<ModuleProject Include="$(GalleryFolder)\Modules\**\*.csproj" />
 			<ModuleFolder Include="@(ModuleProject -> '%(Directory)')" />
@@ -45,7 +46,7 @@
 		<Copy SourceFiles="@(ModulePackage)" DestinationFolder="$(SourceModulesFolder)" />
 	</Target>
 	<Target Name="Clean">
-		<RemoveDir Directories="$(UpstreamFolder)" />
+		<RemoveDir Directories="$(UpstreamFolder);$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder)" />
 	</Target>
 		<Target Name="Publish">
 		<ItemGroup>

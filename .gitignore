@@ -1,4 +1,6 @@
 pkg
+pkgsrc
+pkgbin
 upstream
 bin
 obj

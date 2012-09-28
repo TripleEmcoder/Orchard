@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Build.BuildEngine;
@@ -17,16 +18,16 @@ namespace ConsoleApplication1
         {
             var cacheDirectory = Path.Combine(Directory.GetCurrentDirectory(), "cache");
             var orchardDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkg";
-            var inputDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkg\src";
-            var outputDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkg\bin";
+            var inputDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkgsrc";
+            var outputDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkgbin";
 
             var cacheFileSystem = new PhysicalFileSystem(cacheDirectory);
             var cachePackageResolver = new DefaultPackagePathResolver(cacheFileSystem, false);
 
             var orchardRepository = new AggregateRepository(new IPackageRepository[]
                 {
+                    new LocalPackageRepository(orchardDirectory),
                     new DataServicePackageRepository(new Uri("http://nuget.org/api/v2")), 
-                    new LocalPackageRepository(orchardDirectory)
                 });
 
             var orchardManager = new PackageManager(orchardRepository, cachePackageResolver, cacheFileSystem);
@@ -52,50 +53,38 @@ namespace ConsoleApplication1
 
             inputManager.InstallPackage(inputPackage, false, false);
             var packageDirectory = Path.Combine(cacheDirectory, inputPackage.Id);
-
             var moduleDirectory = Directory.GetDirectories(Path.Combine(packageDirectory, "Content", "Modules"))[0];
             var moduleName = Path.GetFileName(moduleDirectory);
             var project = solution.LoadProject(Path.Combine(moduleDirectory, moduleName + ".csproj"));
 
-            foreach (var reference in references)
+            var candidateDirectories = references
+                   .Select(r => Path.Combine(cacheDirectory, r))
+                   .Concat(Directory.EnumerateDirectories(cacheDirectory).Where(d => !Path.GetFileName(d).StartsWith("Orchard.")))
+                   .Join(new[] { "net40", "net20", "net", "" }, l => true, r => true, (l, r) => Path.Combine(l, "lib", r))
+                   .Where(Directory.Exists)
+                   .ToList();
+
+            foreach (var item in GetReferences(project).ToList())
             {
-                var item = project.Items.SingleOrDefault(i => i.ItemType == "ProjectReference" && i.GetMetadataValue("Name") == reference);
-
-                if (item == null)
-                    continue;
-
-                ReplaceReference(project, item, reference, Path.Combine(cacheDirectory, reference, "lib", "net"));
+                var referenceName = GetReferenceName(item);
+                var referenceDirectory = candidateDirectories.FirstOrDefault(d => File.Exists(Path.Combine(d, referenceName + ".dll")));
+                
+                if (referenceDirectory != null)
+                    ReplaceReference(project, item, referenceName, referenceDirectory);
             }
 
-            foreach (var item in project.Items.Where(i => i.ItemType == "Reference").ToList())
+            foreach (var item in GetModuleReferences(project).ToList())
             {
-                var externalReferenceDirectory = Path.Combine(cacheDirectory, "Orchard.External", "lib", "net");
+                var referencedModuleName = item.GetMetadataValue("Name");
+                var referencedPackageId = "Orchard.Module." + item.GetMetadataValue("Name");
 
-                if (item.GetMetadataValue("HintPath").StartsWith(@"..\..\..\..\lib"))
-                {
-                    ReplaceReference(project, item, Path.GetFileNameWithoutExtension(item.GetMetadataValue("HintPath")), externalReferenceDirectory);
-                }
-                else if (item.EvaluatedInclude.StartsWith("ClaySharp,"))
-                {
-                    ReplaceReference(project, item, "ClaySharp", externalReferenceDirectory);
-                }
+                Do(inputRepository, inputManager, inputRepository.FindPackage(referencedPackageId), cacheDirectory, references, outputDirectory);
+                ReplaceReference(project, item, referencedModuleName, Path.Combine(cacheDirectory, referencedPackageId, "Content", "Modules", referencedModuleName, "bin"));
             }
-
-            foreach (var item in project.Items.Where(i => i.ItemType == "ProjectReference").ToList())
-            {
-                if (item.EvaluatedInclude.StartsWith(@"..\") && !item.EvaluatedInclude.StartsWith(@"..\..\"))
-                {
-                    Console.WriteLine(moduleName + " -> " + item.EvaluatedInclude);
-                    var referencedModuleName = item.GetMetadataValue("Name");
-                    var referencedPackageId = "Orchard.Module." + item.GetMetadataValue("Name");
-
-                    Do(inputRepository, inputManager, inputRepository.FindPackage(referencedPackageId), cacheDirectory, references, outputDirectory);
-                    ReplaceReference(project, item, referencedModuleName, Path.Combine(cacheDirectory, referencedPackageId, "Content", "Modules", referencedModuleName, "bin"));
-                }
-            }
-
-            if (!project.Build(logger))
-                throw new Exception("Failed to build");
+            
+            if (!File.Exists(Path.Combine(moduleDirectory, "bin", moduleName + ".dll")))
+                if (!project.Build(logger))
+                    throw new Exception("Failed to build");
 
             var rules = new[]
                 {
@@ -120,6 +109,29 @@ namespace ConsoleApplication1
             Directory.CreateDirectory(outputDirectory);
             using (var outputPackageFile = File.Create(Path.Combine(outputDirectory, manifest.Metadata.Id + "." + manifest.Metadata.Version + ".nupkg")))
                 b.Save(outputPackageFile);
+        }
+
+        private static string GetReferenceName(ProjectItem item)
+        {
+            if (item.ItemType == "ProjectReference")
+                return Path.GetFileNameWithoutExtension(item.EvaluatedInclude);
+            
+            if (item.ItemType == "Reference")
+                return new AssemblyName(item.EvaluatedInclude).Name;
+            
+            throw new NotSupportedException(); 
+        }
+
+        private static IEnumerable<ProjectItem> GetReferences(Project project)
+        {
+            return project.Items.Where(i => i.ItemType == "ProjectReference" || i.ItemType == "Reference");
+        }
+
+        private static IEnumerable<ProjectItem> GetModuleReferences(Project project)
+        {
+            return project.Items
+                .Where(i => i.ItemType == "ProjectReference")
+                .Where(i => i.EvaluatedInclude.StartsWith(@"..\") && !i.EvaluatedInclude.StartsWith(@"..\..\"));
         }
 
         private static void ReplaceReference(Project project, ProjectItem item, string reference, string path)
