@@ -2,6 +2,7 @@ pkg
 pkgsrc
 pkgbin
 upstream
+cache
 bin
 obj
 _ReSharper.*

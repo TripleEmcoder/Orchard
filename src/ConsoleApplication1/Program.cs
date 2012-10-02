@@ -16,10 +16,10 @@ namespace ConsoleApplication1
     {
         static void Main(string[] args)
         {
-            var cacheDirectory = Path.Combine(Directory.GetCurrentDirectory(), "cache");
-            var orchardDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkg";
-            var inputDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkgsrc";
-            var outputDirectory = @"E:\Marcin\Documents\Praca\Projekty\SymbolSource.Orchard\pkgbin";
+            var orchardDirectory = args[0];
+            var inputDirectory = args[1];
+            var outputDirectory = args[2];
+            var cacheDirectory = args[4];
 
             var cacheFileSystem = new PhysicalFileSystem(cacheDirectory);
             var cachePackageResolver = new DefaultPackagePathResolver(cacheFileSystem, false);

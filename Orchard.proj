@@ -5,13 +5,16 @@
 		<UpstreamFolder>$(MSBuildProjectDirectory)\upstream</UpstreamFolder>
 		<OutputPackageFolder>$(MSBuildProjectDirectory)\pkg</OutputPackageFolder>
 		<SourceModulesFolder>$(MSBuildProjectDirectory)\pkgsrc</SourceModulesFolder>
-		<BinaryModulesFolder>$(MSBuildProjectDirectory)\pkgsrc</BinaryModulesFolder>
+		<BinaryModulesFolder>$(MSBuildProjectDirectory)\pkgbin</BinaryModulesFolder>
 		<NuGet>$(MSBuildProjectDirectory)\nuget.exe</NuGet>
 		<GalleryArtifactFolder>$(UpstreamFolder)\artifacts\Gallery</GalleryArtifactFolder>
 		<GalleryFolder>$(UpstreamFolder)\build\Gallery</GalleryFolder>
 		<PackageSpecFolder>$(MSBuildProjectDirectory)</PackageSpecFolder>
 		<OverrideFolder>$(MSBuildProjectDirectory)\override</OverrideFolder>
 		<PackagePublishUrl>http://nuget.gw.symbolsource.org/Public/Orchard</PackagePublishUrl>
+		<ModuleCompilerProject>$(MSBuildProjectDirectory)\src\ConsoleApplication1\ConsoleApplication1.sln</ModuleCompilerProject>
+		<ModuleCompiler>$(MSBuildProjectDirectory)\src\ConsoleApplication1\bin\Debug\ConsoleApplication1.exe</ModuleCompiler>
+		<CacheFolder>$(MSBuildProjectDirectory)\cache</CacheFolder>
 	</PropertyGroup>
 	<Target Name="Build">
 		<CallTarget Targets="Clean;Compile;Package" />
@@ -22,6 +25,7 @@
 		</ItemGroup>
 		<Unzip ZipFileName="@(UpstreamPackage)" TargetDirectory="$(UpstreamFolder)" Condition="!Exists($(UpstreamFolder))" />
 		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Compile" />
+		<MSBuild Projects="$(ModuleCompilerProject)" Targets="Build" />
 	</Target>
 	<Target Name="Package">
 		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Package-Stage" />
@@ -44,9 +48,11 @@
 		</ItemGroup>
 		<Message Text="%(ModulePackage.Identity)" />
 		<Copy SourceFiles="@(ModulePackage)" DestinationFolder="$(SourceModulesFolder)" />
+		<Exec Command="&quot;$(ModuleCompiler)&quot; &quot;$(OutputPackageFolder)&quot; &quot;$(SourceModulesFolder)&quot; &quot;$(BinaryModulesFolder)&quot; &quot;$(CacheFolder)&quot;" />
 	</Target>
 	<Target Name="Clean">
-		<RemoveDir Directories="$(UpstreamFolder);$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder)" />
+		<RemoveDir Directories="$(UpstreamFolder);$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder);$(CacheFolder)" />
+		<MSBuild Projects="$(ModuleCompilerProject)" Targets="Clean" />
 	</Target>
 		<Target Name="Publish">
 		<ItemGroup>
