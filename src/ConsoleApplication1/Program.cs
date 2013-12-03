@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Build.BuildEngine;
 using Microsoft.Build.Evaluation;
+using Microsoft.Build.Framework;
 using NuGet;
 using Project = Microsoft.Build.Evaluation.Project;
 
@@ -19,7 +20,7 @@ namespace ConsoleApplication1
             var orchardDirectory = args[0];
             var inputDirectory = args[1];
             var outputDirectory = args[2];
-            var cacheDirectory = args[4];
+            var cacheDirectory = args[3];
 
             var cacheFileSystem = new PhysicalFileSystem(cacheDirectory);
             var cachePackageResolver = new DefaultPackagePathResolver(cacheFileSystem, false);
@@ -48,9 +49,10 @@ namespace ConsoleApplication1
 
         private static void Do(LocalPackageRepository inputRepository, PackageManager inputManager, IPackage package, string cacheDirectory, IEnumerable<string> references, string outputDirectory)
         {
-            Console.WriteLine(package.GetFullName());
+            Console.WriteLine("--- Building {0} ---", package.GetFullName());
             var solution = new ProjectCollection();
             var logger = new ConsoleLogger();
+            logger.Verbosity = LoggerVerbosity.Minimal;
 
             inputManager.InstallPackage(package, false, false);
             var packageDirectory = Path.Combine(cacheDirectory, package.Id);
@@ -61,7 +63,7 @@ namespace ConsoleApplication1
             var candidateDirectories = references
                    .Select(r => Path.Combine(cacheDirectory, r))
                    .Concat(Directory.EnumerateDirectories(cacheDirectory).Where(d => !Path.GetFileName(d).StartsWith("Orchard.")))
-                   .Join(new[] { "net40", "net20", "net", "" }, l => true, r => true, (l, r) => Path.Combine(l, "lib", r))
+                   .Join(new[] { "net40-full", "net40", "net35", "net20", "net", "" }, l => true, r => true, (l, r) => Path.Combine(l, "lib", r))
                    .Where(Directory.Exists)
                    .ToList();
 
@@ -71,7 +73,10 @@ namespace ConsoleApplication1
                 var referenceDirectory = candidateDirectories.FirstOrDefault(d => File.Exists(Path.Combine(d, referenceName + ".dll")));
 
                 if (referenceDirectory != null)
+                {
+                    Console.WriteLine("Replacing reference {0} with {1}", referenceName, referenceDirectory);
                     ReplaceReference(project, item, referenceName, referenceDirectory);
+                }
             }
 
             var dependencies = new List<ManifestDependency>();
@@ -82,6 +87,7 @@ namespace ConsoleApplication1
                 var referencedPackageId = "Orchard.Module." + item.GetMetadataValue("Name");
                 var referencedPackage = inputRepository.FindPackage(referencedPackageId);
 
+                Console.WriteLine("Depends on {0}", referencedModuleName);
                 dependencies.Add(new ManifestDependency { Id = referencedPackage.Id, Version = "[" + referencedPackage.Version + "]" });
 
                 Do(inputRepository, inputManager, referencedPackage, cacheDirectory, references, outputDirectory);
@@ -114,7 +120,8 @@ namespace ConsoleApplication1
             builder.PopulateFiles(packageDirectory, manifest.Files);
 
             Directory.CreateDirectory(outputDirectory);
-            using (var outputPackageFile = File.Create(Path.Combine(outputDirectory, manifest.Metadata.Id + "." + manifest.Metadata.Version + ".nupkg")))
+            var outputPackgeFileName = Path.Combine(outputDirectory, manifest.Metadata.Id + "." + manifest.Metadata.Version + ".nupkg");
+            using (var outputPackageFile = File.Create(outputPackgeFileName))
                 builder.Save(outputPackageFile);
         }
 

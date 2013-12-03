@@ -9,40 +9,52 @@
 		<NuGet>$(MSBuildProjectDirectory)\nuget.exe</NuGet>
 		<GalleryArtifactFolder>$(UpstreamFolder)\artifacts\Gallery</GalleryArtifactFolder>
 		<GalleryFolder>$(UpstreamFolder)\build\Gallery</GalleryFolder>
-		<PackageSpecFolder>$(MSBuildProjectDirectory)</PackageSpecFolder>
+		<MainPackageSpecFolder>$(MSBuildProjectDirectory)</MainPackageSpecFolder>
 		<OverrideFolder>$(MSBuildProjectDirectory)\override</OverrideFolder>
 		<PackagePublishUrl>http://nuget.gw.symbolsource.org/Public/Orchard</PackagePublishUrl>
 		<ModuleCompilerProject>$(MSBuildProjectDirectory)\src\ConsoleApplication1\ConsoleApplication1.sln</ModuleCompilerProject>
 		<ModuleCompiler>$(MSBuildProjectDirectory)\src\ConsoleApplication1\bin\Debug\ConsoleApplication1.exe</ModuleCompiler>
 		<CacheFolder>$(MSBuildProjectDirectory)\cache</CacheFolder>
 	</PropertyGroup>
+	<ItemGroup>
+		<UpstreamPackage Include="$(UpstreamPackagePattern)" />
+		<HostingPackageSpec Include="$(MainPackageSpecFolder)\*.Hosting.nuspec"  />
+		<MainPackageSpec Include="$(MainPackageSpecFolder)\*.nuspec" Exclude="@(HostingPackageSpec)"  />
+		<OverrideFile Include="$(OverrideFolder)\**\*.*" />
+	</ItemGroup>
 	<Target Name="Build">
 		<CallTarget Targets="Clean;Compile;Package" />
 	</Target>
 	<Target Name="Compile">
-		<ItemGroup>
-			<UpstreamPackage Include="$(UpstreamPackagePattern)" />
-		</ItemGroup>
 		<Unzip ZipFileName="@(UpstreamPackage)" TargetDirectory="$(UpstreamFolder)" Condition="!Exists($(UpstreamFolder))" />
 		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Compile" />
 		<MSBuild Projects="$(ModuleCompilerProject)" Targets="Build" />
 	</Target>
 	<Target Name="Package">
-		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Package-Stage" />
-		<ItemGroup>
-			<PackageSpec Include="$(PackageSpecFolder)\*.nuspec"  />
-			<OverrideFile Include="$(OverrideFolder)\**\*.*" />
-		</ItemGroup>
-		<MakeDir Directories="$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder)" />
-		<Exec Command="$(NuGet) pack %(PackageSpec.Identity) -OutputDirectory $(OutputPackageFolder) -BasePath $(UpstreamFolder)" />
-		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Gallery" />
-		<ItemGroup>
-			<ModuleProject Include="$(GalleryFolder)\Modules\**\*.csproj" />
-			<ModuleFolder Include="@(ModuleProject -> '%(Directory)')" />
-			<ModuleName Include="@(ModuleProject -> '%(FileName)')" />
-		</ItemGroup>
+		<CallTarget Targets="Package-Main;Stage-Modules;Package-Modules" />
+		<MSBuild Projects="$(UpstreamFolder)\Orchard.proj" Targets="Package-Stage;Gallery" />
 		<Copy SourceFiles="@(OverrideFile)" DestinationFiles="@(OverrideFile->'$(GalleryFolder)\%(RecursiveDir)%(Filename)%(Extension)')" />
+		<CallTarget Targets="Stage-Modules;Package-Modules;Stage-Themes" />
+	</Target>
+	<Target Name="Package-Main">
+		<MakeDir Directories="$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder)" />
+		<Exec Command="$(NuGet) pack %(MainPackageSpec.Identity) -OutputDirectory $(OutputPackageFolder) -BasePath $(UpstreamFolder)" />
+	</Target>
+	<Target Name="Stage-Modules">		
+		<ItemGroup>
+			<ModuleDescriptor Include="$(GalleryFolder)\Modules\**\Module.txt" />
+			<ModuleName Include="@(ModuleDescriptor->'%(RecursiveDir)'->Replace('\', ''))" />
+		</ItemGroup>
 		<Exec Command="&quot;$(GalleryFolder)\bin\Orchard.exe&quot; package create %(ModuleName.Identity) &quot;$(GalleryArtifactFolder)&quot;" WorkingDirectory="$(GalleryFolder)" />
+	</Target>
+	<Target Name="Stage-Themes">
+		<ItemGroup>
+			<ThemeDescriptor Include="$(GalleryFolder)\Themes\**\Theme.txt" />
+			<ThemeName Include="@(ThemeDescriptor->'%(RecursiveDir)'->Replace('\', ''))" />
+		</ItemGroup>
+		<Exec Command="&quot;$(GalleryFolder)\bin\Orchard.exe&quot; package create %(ThemeName.Identity) &quot;$(GalleryArtifactFolder)&quot;" WorkingDirectory="$(GalleryFolder)" />
+	</Target>
+	<Target Name="Package-Modules">
 		<ItemGroup>
 			<ModulePackage Include="$(GalleryArtifactFolder)\Orchard.Module.*.nupkg" />
 		</ItemGroup>
@@ -54,7 +66,7 @@
 		<RemoveDir Directories="$(UpstreamFolder);$(OutputPackageFolder);$(SourceModulesFolder);$(BinaryModulesFolder);$(CacheFolder)" />
 		<MSBuild Projects="$(ModuleCompilerProject)" Targets="Clean" />
 	</Target>
-		<Target Name="Publish">
+	<Target Name="Publish">
 		<ItemGroup>
 			<Package Include="$(OutputPackageFolder)\*.nupkg" />
 			<Package Include="$(BinaryModulesFolder)\*.nupkg" />
